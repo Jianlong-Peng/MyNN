@@ -137,8 +137,10 @@ class NeuralNetwork:
         X = np.copy(X)
         if y.ndim == 1:
             t = y.reshape(y.shape[0],1)
+            assert self.layers[-1].n == 1
         else:
             t = np.copy(y)
+            assert y.shape[1] == self.layers[-1].n
 
         m = X.shape[0]
         one_col = np.ones(m).reshape(m,1)
