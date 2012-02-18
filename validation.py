@@ -23,5 +23,6 @@ def class_error(t,z):
             err += 1
     return err
 
-
+def cross_validation(X,y):
+    pass
 
