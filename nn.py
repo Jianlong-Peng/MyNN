@@ -1,19 +1,7 @@
-'''
-#=============================================================================
-#     FileName: nn.py
-#         Desc: 
-#       Author: jlpeng
-#        Email: jlpeng1201@gmail.com
-#     HomePage: 
-#      Created: 2015-02-05 10:25:09
-#   LastChange: 2015-02-16 00:20:11
-#      History:
-#=============================================================================
-'''
 from random import random
 import numpy as np
-import matplotlib.pyplot as plt
-from layer import *
+from layer import Layer
+from validation import calc_l1_norm
 
 """
 3-layer feed-forward neural network
@@ -77,6 +65,7 @@ More general cases (L-layer NN)
 """
 
 
+
 #Attention:
 # 1. how to deal with NN with more than one output neuro???
 class NeuralNetwork:
@@ -129,18 +118,20 @@ class NeuralNetwork:
             Y = self.layers[i].activate(Y, self.weight[i], self.bias[i])
         return Y
 
-    def train(self, X, y, _epoch=1E5, _epsilon=0.01, _rate=1E-3, _lambda=0, verbose=False):
+    def train(self, X, y, _epoch=1E5, _epsilon=0.01, _rate=1E-3, _lambda=0, verbose=False, estimate=calc_l1_norm):
         '''
         Parameter
         =========
         X: np.ndarray with shape (m, ni)
            where, m is number of samples, ni is number of predictors
-        y: np.ndarray with shape (m,)
+        y: np.ndarray with shape (m,) or (m,1) or (m,p)
         _epoch:   maximum number of iterations
-        _epsilon: threshold
+        _epsilon: threshold, stop when `_epsilon < estimate(t,z)`
         _rate:    learning rate
         _lambda:  parameter for L2-norm
         verbose:  bool
+        estimate: function to estimate training
+                  `float f(target,predict)`
 
         '''
         X = np.copy(X)
@@ -156,7 +147,7 @@ class NeuralNetwork:
         while n < _epoch:
             n += 1
             if verbose:
-                print "iter #%d, error=%g"%(n,err)
+                print "iter #%d, norm=%g"%(n,err)
             #1. forward
             net = [None for _ in xrange(len(self.layers))]
             net[0] = X
@@ -169,7 +160,7 @@ class NeuralNetwork:
                     net[i] += one_col.dot(self.bias[i])
                 z[i] = self.layers[i].f(net[i])
             #2. estimate
-            err = np.sum(np.abs(t-z[-1]))
+            err = estimate(t,z[-1])
             if err < _epsilon:
                 break
             #3. backpropgation
@@ -197,75 +188,38 @@ class NeuralNetwork:
             self.weight[1] = self.weight[1] + _rate * (delta3 + _lambda * self.weight[1])
             if self.bias[1] is not None:
                 self.bias[1] = self.bias[1] + _rate * (delta4 + _lambda * self.bias[1])
-
+        
+        #print "#iter:",n
+        #print "error:",err
         if n == _epoch:
             print "Warning: maximum number of iteration (%g) reached, norm=%g"%(_epoch, err)
 
 
-def func1(X,beta):
-    y = np.zeros(X.shape[0])
-    for i in xrange(X.shape[0]):
-        for j in xrange(X.shape[1]):
-            y[i] += pow(X[i][j],beta[j][0])
-        y[i] += beta[-1][0]
-    return y.reshape(X.shape[0],1)
+def convert_y(y):
+    '''
+    OBJ
+    ===
+    for classification problem, to convert class label
+    to those suitable for neural network
 
-def func2(X,beta):
-    X2 = np.concatenate((np.power(X,2),np.ones(X.shape[0]).reshape(X.shape[0],1)),axis=1)
-    y = X2.dot(beta)
-    return y
+    Parameter
+    =========
+    y: np.ndarray with shape (m,) or (m,1) or (1,m)
 
-def func3(X,beta):
-    X2 = np.concatenate((X,np.ones(X.shape[0]).reshape(X.shape[0],1)),axis=1)
-    y = X2.dot(beta)
-    return y
-
-def test_regression():
-    p = 10
-    n = 40
-    X = np.random.multivariate_normal(np.zeros(p),np.eye(p),(n,))
-    beta = np.random.randn(p+1).reshape(p+1,1)
-    y = func3(X, beta)
-
-    _in = LinearLayer(p)
-    hidden1 = SigmoidLayer(4)
-    hidden2 = SigmoidLayer(4)
-    output = LinearLayer(1)
-    model = NeuralNetwork(_in, hidden1, hidden2, output, bias=True)
-    print "number of parameters: %d"%(model.num_parameters())
-    print "to train the model..."
-    model.train(X,y,verbose=True)
-
-    pred = model.predict(X)
-    mae = np.mean(np.abs(y-pred))
-    rmse = np.sqrt(np.mean(np.power(y-pred,2)))
-    r2 = np.power(np.corrcoef(y.flatten(),pred.flatten())[0][1],2)
-    print "===reuslts on training set==="
-    print "mae=%g, rmse=%g, r2=%g"%(mae,rmse,r2)
-    plt.plot(y,pred,'o',color='r',label="training set")
-
-    testX = np.random.multivariate_normal(np.zeros(p),np.eye(p),(500,))
-    testY = func3(testX, beta)
-    test_pred = model.predict(testX)
-    mae = np.mean(np.abs(testY-test_pred))
-    rmse = np.sqrt(np.mean(np.power(testY-test_pred,2)))
-    r2 = np.power(np.corrcoef(testY.flatten(),test_pred.flatten())[0][1],2)
-    print "===results on test set==="
-    print "mae=%g, rmse=%g, r2=%g"%(mae,rmse,r2)
-    print "np.mean(np.abs(testY))=%g"%(np.mean(np.abs(testY)))
-    
-    plt.plot(testY,test_pred,'o',color='g',label="test set")
-    plt.xlabel("actualY")
-    plt.ylabel("predictY")
-    plt.legend(loc="lower right")
-    xmin,xmax = plt.xlim()
-    ymin,ymax = plt.ylim()
-    _min = min(xmin,ymin)
-    _max = max(xmax,ymax)
-    plt.xlim(_min,_max)
-    plt.ylim(_min,_max)
-    plt.show()
-
-if __name__ == "__main__":
-    test_regression()
+    Return
+    ======
+    (new_y,unique_label)
+    each is np.ndarray with shape (m,p) and (p,)
+    '''
+    assert len(y.shape)==1 or (len(y.shape)==2 and (y.shape[0]==1 or y.shape[1]==1))
+    y = y.flatten()
+    labels = np.unique(y).tolist()
+    labels.sort()
+    m = y.shape[0]
+    p = len(labels)
+    new_y = np.zeros(m*p).reshape(m,p)
+    for i in xrange(m):
+        j = labels.index(y[i])
+        new_y[i][j] = 1
+    return new_y,np.asarray(labels)
 
